@@ -19,6 +19,14 @@ SudokuAI provides an efficient solution for automated sudoku recognition and sol
 - Client-side processing with no backend requirements
 - Optimized API calls with configurable timeouts
 
+
+
+## Screenshots
+
+![SudokuAI Interface - Top Section](images/img11.jpeg)
+
+![SudokuAI Interface - Bottom Section](images/img2.jpeg)
+
 ## Technology Stack
 
 - Frontend: HTML5, CSS3, Vanilla JavaScript
