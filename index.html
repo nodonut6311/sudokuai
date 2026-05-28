@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sudoku Solver</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0d0d;
+      --surface:   #141414;
+      --surface2:  #1c1c1c;
+      --border:    #2a2a2a;
+      --border2:   #3a3a3a;
+      --gold:      #c9a84c;
+      --gold-dim:  #8a6f2e;
+      --gold-glow: rgba(201,168,76,0.15);
+      --text:      #e8e2d4;
+      --text-dim:  #6b6560;
+      --text-mid:  #a09890;
+      --red:       #c0392b;
+      --green:     #27ae60;
+      --radius:    12px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      overflow-x: hidden;
+    }
+
+    /* ── Noise texture overlay ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.6;
+    }
+
+    /* ── Grid background lines ── */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 48px 48px;
+      opacity: 0.18;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 24px 80px;
+    }
+
+    /* ── Header ── */
+    header {
+      width: 100%;
+      max-width: 880px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 64px;
+      animation: fadeDown 0.6s ease both;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      grid-template-rows: repeat(3,1fr);
+      gap: 3px;
+    }
+
+    .logo-icon span {
+      background: var(--gold-dim);
+      border-radius: 2px;
+      transition: background 0.3s;
+    }
+    .logo-icon span:nth-child(2),
+    .logo-icon span:nth-child(4),
+    .logo-icon span:nth-child(6),
+    .logo-icon span:nth-child(8) {
+      background: var(--gold);
+    }
+
+    .logo-text {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+
+    .logo-text span {
+      color: var(--gold);
+    }
+
+    .badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--gold);
+      border: 1px solid var(--gold-dim);
+      padding: 4px 10px;
+      border-radius: 99px;
+      letter-spacing: 0.1em;
+      background: var(--gold-glow);
+    }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      margin-bottom: 56px;
+      animation: fadeUp 0.7s 0.1s ease both;
+    }
+
+    .hero h1 {
+      font-size: clamp(36px, 6vw, 64px);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+
+    .hero h1 em {
+      font-style: normal;
+      color: var(--gold);
+    }
+
+    .hero p {
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      color: var(--text-mid);
+      letter-spacing: 0.04em;
+      line-height: 1.7;
+    }
+
+    /* ── Main card ── */
+    .card {
+      width: 100%;
+      max-width: 880px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+      animation: fadeUp 0.7s 0.2s ease both;
+    }
+
+    .card-header {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab {
+      flex: 1;
+      padding: 18px 24px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      border-bottom: 2px solid transparent;
+      font-family: 'DM Mono', monospace;
+    }
+
+    .tab.active {
+      color: var(--gold);
+      border-bottom-color: var(--gold);
+      background: var(--gold-glow);
+    }
+
+    .card-body {
+      padding: 40px;
+    }
+
+    /* ── Upload zone ── */
+    .upload-zone {
+      border: 1.5px dashed var(--border2);
+      border-radius: var(--radius);
+      padding: 60px 40px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      position: relative;
+      background: var(--surface2);
+    }
+
+    .upload-zone:hover,
+    .upload-zone.dragover {
+      border-color: var(--gold);
+      background: var(--gold-glow);
+      transform: translateY(-2px);
+    }
+
+    .upload-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .upload-icon {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 20px;
+      border: 1.5px solid var(--border2);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--surface);
+      transition: all 0.25s;
+    }
+
+    .upload-zone:hover .upload-icon,
+    .upload-zone.dragover .upload-icon {
+      border-color: var(--gold);
+      background: var(--gold-glow);
+    }
+
+    .upload-icon svg {
+      width: 24px;
+      height: 24px;
+      stroke: var(--gold);
+    }
+
+    .upload-zone h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .upload-zone p {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+    }
+
+    .upload-zone p span {
+      color: var(--gold);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    /* ── Preview area ── */
+    .preview-area {
+      display: none;
+      gap: 32px;
+      align-items: flex-start;
+    }
+
+    .preview-area.visible {
+      display: flex;
+    }
+
+    .preview-image-wrap {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .preview-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 10px;
+    }
+
+    .preview-image-wrap img {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      display: block;
+    }
+
+    .preview-actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 22px;
+      border-radius: 8px;
+      font-family: 'Syne', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background: var(--gold);
+      color: #0d0d0d;
+      flex: 1;
+    }
+
+    .btn-primary:hover {
+      background: #e0bc60;
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(201,168,76,0.3);
+    }
+
+    .btn-primary:active { transform: translateY(0); }
+
+    .btn-primary:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--border2);
+      color: var(--text);
+    }
+
+    .btn svg {
+      width: 15px;
+      height: 15px;
+      flex-shrink: 0;
+    }
+
+    /* ── Solve panel ── */
+    .solve-panel {
+      flex: 1.2;
+      min-width: 0;
+    }
+
+    /* ── Sudoku Grid ── */
+    .grid-wrap {
+      position: relative;
+    }
+
+    .sudoku-grid {
+      display: grid;
+      grid-template-columns: repeat(9, 1fr);
+      gap: 0;
+      border: 2px solid var(--border2);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--surface2);
+      font-family: 'DM Mono', monospace;
+    }
+
+    .cell {
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(12px, 1.8vw, 18px);
+      font-weight: 500;
+      color: var(--text-dim);
+      border-right: 1px solid #222;
+      border-bottom: 1px solid #222;
+      transition: all 0.15s;
+      position: relative;
+    }
+
+    /* Thicker borders for 3x3 box separators */
+    .cell:nth-child(3n) { border-right: 2px solid var(--border2); }
+    .cell:nth-child(9n) { border-right: none; }
+    .cell:nth-child(n+19):nth-child(-n+27) { border-bottom: 2px solid var(--border2); }
+    .cell:nth-child(n+46):nth-child(-n+54) { border-bottom: 2px solid var(--border2); }
+    .cell:nth-child(n+73):nth-child(-n+81) { border-bottom: none; }
+
+    .cell.filled {
+      color: var(--gold);
+      background: var(--gold-glow);
+      animation: popIn 0.3s ease both;
+    }
+
+    .cell.given {
+      color: var(--text-mid);
+    }
+
+    .cell.empty-placeholder {
+      color: #2a2a2a;
+    }
+
+    /* ── Loading state ── */
+    .loading-state {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 0;
+      gap: 20px;
+    }
+
+    .loading-state.visible { display: flex; }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 2px solid var(--border2);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .loading-state p {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--text-mid);
+      letter-spacing: 0.1em;
+    }
+
+    /* ── Status bar ── */
+    .status-bar {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+    }
+
+    .status-bar.visible { display: flex; }
+
+    .status-bar.success {
+      background: rgba(39,174,96,0.1);
+      border: 1px solid rgba(39,174,96,0.25);
+      color: var(--green);
+    }
+
+    .status-bar.error {
+      background: rgba(192,57,43,0.1);
+      border: 1px solid rgba(192,57,43,0.25);
+      color: var(--red);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
+    }
+
+    /* ── Placeholder grid ── */
+    .grid-placeholder {
+      display: grid;
+      grid-template-columns: repeat(9,1fr);
+      gap: 0;
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      opacity: 0.3;
+      pointer-events: none;
+    }
+
+    .grid-placeholder .cell {
+      color: #2a2a2a;
+      font-size: 14px;
+    }
+
+    /* ── Empty state message ── */
+    .empty-hint {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 0;
+      gap: 12px;
+    }
+
+    .empty-hint svg {
+      width: 32px;
+      height: 32px;
+      stroke: var(--border2);
+    }
+
+    .empty-hint p {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+      text-align: center;
+    }
+
+    /* ── How it works ── */
+    .how-section {
+      width: 100%;
+      max-width: 880px;
+      margin-top: 48px;
+      animation: fadeUp 0.7s 0.35s ease both;
+    }
+
+    .how-title {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 24px;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      transition: border-color 0.2s;
+    }
+
+    .step:hover { border-color: var(--border2); }
+
+    .step-num {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--gold);
+      letter-spacing: 0.1em;
+      margin-bottom: 12px;
+    }
+
+    .step h4 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .step p {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--text-dim);
+      line-height: 1.7;
+      letter-spacing: 0.03em;
+    }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: 64px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+      animation: fadeUp 0.7s 0.4s ease both;
+    }
+
+    footer span { color: var(--gold); }
+
+    /* ── Animations ── */
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.6); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .card-body { padding: 24px; }
+      .preview-area.visible { flex-direction: column; }
+      .steps { grid-template-columns: 1fr; }
+      .hero h1 { font-size: 32px; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">
+        <span></span><span></span><span></span>
+        <span></span><span></span><span></span>
+        <span></span><span></span><span></span>
+      </div>
+      <div class="logo-text">Sudoku<span>AI</span></div>
+    </div>
+    <div class="badge">Powered by Gemini</div>
+  </header>
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>Solve any sudoku<br/>in <em>seconds.</em></h1>
+    <p>Drop an image. Get the answer.<br/>No typing. No guessing.</p>
+  </div>
+
+  <!-- Main Card -->
+  <div class="card">
+    <div class="card-header">
+      <div class="tab active">Upload Puzzle</div>
+      <div class="tab" id="tab-result">Solution</div>
+    </div>
+
+    <div class="card-body">
+
+      <!-- Upload Zone (shown before image is picked) -->
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept="image/*" />
+        <div class="upload-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+          </svg>
+        </div>
+        <h3>Drop your sudoku image here</h3>
+        <p>Drag & drop or <span>browse files</span> &nbsp;·&nbsp; PNG, JPG, WEBP</p>
+      </div>
+
+      <!-- Preview + Solve (shown after image is picked) -->
+      <div class="preview-area" id="previewArea">
+
+        <!-- Left: image preview -->
+        <div class="preview-image-wrap">
+          <div class="preview-label">Your Puzzle</div>
+          <img id="previewImg" src="" alt="Sudoku puzzle preview" />
+          <div class="preview-actions">
+            <button class="btn btn-primary" id="solveBtn">
+              <svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z"/>
+              </svg>
+              Solve Puzzle
+            </button>
+            <button class="btn btn-ghost" id="resetBtn">
+              <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: solution grid -->
+        <div class="solve-panel">
+          <div class="preview-label">Solution</div>
+
+          <!-- Status bar -->
+          <div class="status-bar" id="statusBar">
+            <div class="status-dot"></div>
+            <span id="statusMsg"></span>
+          </div>
+
+          <!-- Loading spinner -->
+          <div class="loading-state" id="loadingState">
+            <div class="spinner"></div>
+            <p>Analysing puzzle...</p>
+          </div>
+
+          <!-- Empty hint (before solving) -->
+          <div class="empty-hint" id="emptyHint">
+            <svg fill="none" viewBox="0 0 24 24" stroke-width="1" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/>
+            </svg>
+            <p>Hit "Solve Puzzle"<br/>to see the solution here</p>
+          </div>
+
+          <!-- The 9×9 solution grid -->
+          <div class="sudoku-grid" id="solutionGrid" style="display:none;"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- How it works -->
+  <div class="how-section">
+    <div class="how-title">How it works</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01 —</div>
+        <h4>Upload a photo</h4>
+        <p>Take a photo of any printed or handwritten sudoku puzzle and drop it in.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">02 —</div>
+        <h4>AI reads the grid</h4>
+        <p>Gemini's vision model scans the image and extracts every digit from the 9×9 grid.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">03 —</div>
+        <h4>Instant solution</h4>
+        <p>The completed grid is shown with filled cells highlighted, right next to your image.</p>
+      </div>
+    </div>
+  </div>
+
+  <footer>Built with <span>Gemini Vision</span> · SudokuAI</footer>
+
+</div>
+
+<script>
+  // ── Element refs ──
+  const uploadZone  = document.getElementById('uploadZone');
+  const fileInput   = document.getElementById('fileInput');
+  const previewArea = document.getElementById('previewArea');
+  const previewImg  = document.getElementById('previewImg');
+  const solveBtn    = document.getElementById('solveBtn');
+  const resetBtn    = document.getElementById('resetBtn');
+  const loadingState= document.getElementById('loadingState');
+  const emptyHint   = document.getElementById('emptyHint');
+  const solutionGrid= document.getElementById('solutionGrid');
+  const statusBar   = document.getElementById('statusBar');
+  const statusMsg   = document.getElementById('statusMsg');
+
+  let currentFile = null;
+  let currentBase64 = null;
+
+// ── Gemini API config ──
+const GEMINI_API_KEY = 'AQ.Ab8RN6Ja-EyLyySkD4em_FwpfhJYpf67JqlDUnOvd9P7YR3PEQ'; // Get from Google AI Studio
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+
+  // ── Drag & drop ──
+  uploadZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    uploadZone.classList.add('dragover');
+  });
+
+  uploadZone.addEventListener('dragleave', () => {
+    uploadZone.classList.remove('dragover');
+  });
+
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) handleFile(file);
+  });
+
+  fileInput.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (file) handleFile(file);
+  });
+
+  // ── Handle file selection ──
+  function handleFile(file) {
+    currentFile = file;
+    const reader = new FileReader();
+
+    reader.onload = e => {
+      const dataUrl = e.target.result;
+      currentBase64 = dataUrl.split(',')[1]; // strip the "data:image/...;base64," prefix
+      previewImg.src = dataUrl;
+      uploadZone.style.display = 'none';
+      previewArea.classList.add('visible');
+      resetSolutionPanel();
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  // ── Reset UI ──
+  function resetSolutionPanel() {
+    solutionGrid.style.display = 'none';
+    solutionGrid.innerHTML = '';
+    loadingState.classList.remove('visible');
+    emptyHint.style.display = 'flex';
+    statusBar.classList.remove('visible', 'success', 'error');
+    solveBtn.disabled = false;
+    solveBtn.innerHTML = `
+      <svg fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:15px;height:15px">
+        <path stroke-linecap="round" stroke-linejoin="round"
+          d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z"/>
+      </svg>
+      Solve Puzzle`;
+  }
+
+  function resetAll() {
+    uploadZone.style.display = '';
+    previewArea.classList.remove('visible');
+    fileInput.value = '';
+    currentFile = null;
+    currentBase64 = null;
+    resetSolutionPanel();
+  }
+
+  resetBtn.addEventListener('click', resetAll);
+
+  // ── Render the 9×9 grid ──
+  // grid: array of 81 objects { value: number, filled: boolean }
+  function renderGrid(cells) {
+    solutionGrid.innerHTML = '';
+    cells.forEach(({ value, filled }) => {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      if (value && value !== 0) {
+        cell.textContent = value;
+        cell.classList.add(filled ? 'filled' : 'given');
+      } else {
+        cell.textContent = '·';
+        cell.classList.add('empty-placeholder');
+      }
+      solutionGrid.appendChild(cell);
+    });
+    solutionGrid.style.display = 'grid';
+  }
+
+  // ── Show status ──
+  function showStatus(type, msg) {
+    statusBar.className = `status-bar visible ${type}`;
+    statusMsg.textContent = msg;
+  }
+// ── Parse Gemini's JSON response ──
+function parseSudokuResponse(text) {
+    try {
+      // Remove markdown code blocks if present
+      let clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+      const json = JSON.parse(clean);
+      
+      // Validate structure
+      if (!Array.isArray(json.given) || !Array.isArray(json.solution)) {
+        return null;
+      }
+      if (json.given.length !== 81 || json.solution.length !== 81) {
+        return null;
+      }
+      
+      return json;
+    } catch (e) {
+      console.error('Parse error:', e);
+      return null;
+    }
+  }
+
+// ── Solve button — calls Gemini API ──
+solveBtn.addEventListener('click', async () => {
+    if (!currentBase64) return;
+
+    solveBtn.disabled = true;
+    emptyHint.style.display = 'none';
+    solutionGrid.style.display = 'none';
+    loadingState.classList.add('visible');
+    statusBar.classList.remove('visible');
+
+    try {
+      // ── Call Gemini Vision API ──
+      const response = await fetch(
+        `${GEMINI_API_URL}?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    inlineData: {
+                      mimeType: currentFile.type,
+                      data: currentBase64
+                    }
+                  },
+                  {
+                    text: `You are a sudoku solver. Analyze this sudoku puzzle image and:
+1. Extract the grid of 81 cells (9×9) showing ONLY the given numbers (empty cells as 0)
+2. Solve the puzzle
+3. Return ONLY a JSON object with NO markdown, NO backticks, in this exact format:
+{
+  "given": [/* 81 numbers: given puzzle grid */],
+  "solution": [/* 81 numbers: solved grid */]
+}
+Example: {"given": [5,3,0,0,7,0,0,0,0, ...81 total], "solution": [5,3,4,6,7,8,9,1,2, ...81 total]}`
+                  }
+                ]
+              }
+            ]
+          })
+        }
+      );
+
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      const data = await response.json();
+
+      // ── Parse Gemini's response ──
+      const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const parsed = parseSudokuResponse(responseText);
+
+      if (!parsed) throw new Error('Could not parse sudoku grid from response');
+
+      // ── Map given vs filled cells ──
+      const givenSet = new Set();
+      parsed.given.forEach((val, i) => {
+        if (val !== 0) givenSet.add(i);
+      });
+
+      const cells = parsed.solution.map((value, i) => ({
+        value,
+        filled: !givenSet.has(i) && value !== 0
+      }));
+
+      loadingState.classList.remove('visible');
+      showStatus('success', 'Puzzle solved · 81 cells · 0 conflicts');
+      renderGrid(cells);
+
+    } catch (error) {
+      console.error('Solve error:', error);
+      loadingState.classList.remove('visible');
+      showStatus('error', error.message || 'Failed to solve puzzle');
+      solveBtn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
