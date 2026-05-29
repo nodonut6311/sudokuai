@@ -7,7 +7,7 @@ Complete step-by-step guide to get SudokuAI running locally.
 - Mac, Windows, or Linux
 - Web browser (Chrome, Safari, Firefox recommended)
 - Text editor (VS Code, Sublime, etc.)
-- Git installed (for version control)
+- Git installed (for version control)  
 
 ---
 
