@@ -2,7 +2,7 @@
 
 Complete step-by-step guide to get SudokuAI running locally.
 
-## Prerequisites
+## Prerequisites  
 
 - Mac, Windows, or Linux
 - Web browser (Chrome, Safari, Firefox recommended)
