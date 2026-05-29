@@ -8,7 +8,7 @@ A web application that solves sudoku puzzles from photographs using Google Gemin
 
 ## Overview
 
-SudokuAI provides an efficient solution for automated sudoku recognition and solving. The application accepts image uploads of sudoku puzzles, extracts the grid using Google Gemini's vision capabilities, solves the puzzle, and displays the solution with visual distinction between given and computed cells.
+SudokuAI provides an efficient solution for automated sudoku recognition and solving. The application accepts image uploads of sudoku puzzles, extracts the grid using Google Gemini's vision capabilities, solves the puzzle, and displays the solution with visual distinction between given and computed cells. 
 
 ## Features
 
